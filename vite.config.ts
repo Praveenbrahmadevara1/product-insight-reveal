@@ -8,6 +8,11 @@ export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
     port: 8080,
+    proxy: {
+      "/scrape": "http://localhost:8000",
+      "/bulk-csv": "http://localhost:8000",
+      "/health": "http://localhost:8000"
+    },
   },
   plugins: [
     react(),

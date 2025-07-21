@@ -26,6 +26,9 @@ const ProductScraper: React.FC = () => {
   const [productData, setProductData] = useState<ProductData | null>(null);
   const { toast } = useToast();
 
+  const [bulkUrls, setBulkUrls] = useState('');
+  const [bulkLoading, setBulkLoading] = useState(false);
+
   const validateAmazonUrl = (url: string): boolean => {
     return url.includes('amazon.') && (url.includes('/dp/') || url.includes('/gp/'));
   };
@@ -51,21 +54,84 @@ const ProductScraper: React.FC = () => {
 
     setLoading(true);
     try {
-      const response = await axios.post('/scrape', { url });
-      setProductData(response.data);
+      // Always read from env and send correct payload
+      const API_KEY = import.meta.env.VITE_BACKEND_API_KEY;
+      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+      const response = await axios.post(
+        `${API_BASE_URL}/scrape`,
+        { url: url.trim() }, // always send { url: ... }
+        {
+          headers: {
+            'x-api-key': API_KEY,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+      setProductData(response.data.data || response.data); // handle both wrapped and direct data
       toast({
         title: 'Success!',
         description: 'Product data scraped successfully',
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Scraping error:', error);
+      let description = 'Failed to scrape product data. Please try again.';
+      if (error?.response?.status === 401) description = 'Invalid API key.';
+      if (error?.response?.status === 429) description = 'Rate limit exceeded. Please wait and try again.';
+      if (error?.response?.status === 400) description = error?.response?.data?.error || 'Bad request.';
+      if (error?.response?.status === 422) description = 'Invalid request payload. Please check the URL.';
       toast({
         title: 'Scraping Failed',
-        description: 'Failed to scrape product data. Please try again.',
+        description,
         variant: 'destructive',
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleBulkScrape = async () => {
+    if (!bulkUrls.trim()) {
+      toast({
+        title: 'URLs Required',
+        description: 'Please enter one or more Amazon product URLs (one per line)',
+        variant: 'destructive',
+      });
+      return;
+    }
+    setBulkLoading(true);
+    try {
+      const API_KEY = import.meta.env.VITE_BACKEND_API_KEY;
+      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+      const response = await axios.post(
+        `${API_BASE_URL}/bulk-csv`,
+        { url: bulkUrls.trim() },
+        {
+          headers: {
+            'x-api-key': API_KEY,
+            'Content-Type': 'application/json',
+          },
+          responseType: 'blob',
+        }
+      );
+      saveAs(response.data, 'amazon-bulk-report.csv');
+      toast({
+        title: 'Bulk CSV Ready!',
+        description: 'Your CSV file has been downloaded.',
+      });
+    } catch (error: any) {
+      console.error('Bulk scraping error:', error);
+      let description = 'Failed to process bulk scrape. Please try again.';
+      if (error?.response?.status === 401) description = 'Invalid API key.';
+      if (error?.response?.status === 429) description = 'Rate limit exceeded. Please wait and try again.';
+      if (error?.response?.status === 400) description = error?.response?.data?.error || 'Bad request.';
+      if (error?.response?.status === 422) description = 'Invalid request payload. Please check the URLs.';
+      toast({
+        title: 'Bulk Scraping Failed',
+        description,
+        variant: 'destructive',
+      });
+    } finally {
+      setBulkLoading(false);
     }
   };
 
@@ -158,6 +224,47 @@ const ProductScraper: React.FC = () => {
                 <>
                   <ShoppingBag className="mr-2 h-4 w-4" />
                   Scrape Product
+                </>
+              )}
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* Bulk CSV Section */}
+        <Card className="max-w-2xl mx-auto mb-8 shadow-card animate-scale-in">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Download className="h-5 w-5 text-primary" />
+              Bulk CSV Scraper
+            </CardTitle>
+            <CardDescription>
+              Enter multiple Amazon product URLs (one per line) to download a CSV report
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <textarea
+                placeholder="https://www.amazon.in/product1\nhttps://www.amazon.com/product2\n..."
+                value={bulkUrls}
+                onChange={e => setBulkUrls(e.target.value)}
+                className="w-full min-h-[120px] p-2 border rounded text-base"
+                disabled={bulkLoading}
+              />
+            </div>
+            <Button
+              onClick={handleBulkScrape}
+              disabled={bulkLoading || !bulkUrls.trim()}
+              className="w-full h-12 text-base font-medium"
+            >
+              {bulkLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Processing Bulk CSV...
+                </>
+              ) : (
+                <>
+                  <Download className="mr-2 h-4 w-4" />
+                  Download Bulk CSV
                 </>
               )}
             </Button>
