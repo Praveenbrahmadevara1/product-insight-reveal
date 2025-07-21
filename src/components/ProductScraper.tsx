@@ -8,7 +8,6 @@ import { Loader2, Download, ExternalLink, ShoppingBag, DollarSign, FileText, Pal
 import axios from 'axios';
 import { saveAs } from 'file-saver';
 import * as XLSX from 'xlsx';
-import { Parser } from 'json2csv';
 
 interface ProductData {
   product_name: string;
@@ -73,17 +72,24 @@ const ProductScraper: React.FC = () => {
   const exportToCSV = () => {
     if (!productData) return;
     
-    const parser = new Parser();
-    const csvData = parser.parse([{
-      product_name: productData.product_name,
-      original_price: productData.price.original,
-      discounted_price: productData.price.discounted || '',
-      description: productData.description,
-      variants: productData.variants.join('; '),
-      image_urls: productData.image_urls.join('; ')
-    }]);
+    // Create CSV content manually
+    const headers = ['Product Name', 'Original Price', 'Discounted Price', 'Description', 'Variants', 'Image URLs'];
+    const data = [
+      productData.product_name,
+      productData.price.original,
+      productData.price.discounted || '',
+      productData.description.replace(/"/g, '""'), // Escape quotes
+      productData.variants.join('; '),
+      productData.image_urls.join('; ')
+    ];
     
-    const blob = new Blob([csvData], { type: 'text/csv;charset=utf-8;' });
+    // Format as CSV
+    const csvContent = [
+      headers.map(h => `"${h}"`).join(','),
+      data.map(d => `"${d}"`).join(',')
+    ].join('\n');
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     saveAs(blob, 'amazon-product.csv');
   };
 
